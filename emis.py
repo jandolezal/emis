@@ -45,6 +45,29 @@ def gather_links(base_url, urls, gathered):
             gather_links(base_url, links, gathered)
     return gathered
 
+def choose_emission_label(compound):
+    """Aggegate emissions into eight most important groups. Returns a string
+    of the emission group (e.g. carbon monoxide, NH3 etc.).
+    Labels: 'tzl', 'so2', 'nox', 'co', 'voc', 'amoniak', 'co2', 'ostatni'.
+    """
+    compound = compound.lower()
+    if ('oxidy dusíku' in compound) or ('oxid dusičitý' in compound):
+        return 'nox'
+    elif 'oxid uhličitý' in compound:
+        return 'co2'
+    elif 'oxid uhelnatý' in compound:
+        return 'co'
+    elif 'těkavé organické' in compound:
+        return 'voc'
+    elif 'tuhé znečišťující' in compound:
+        return 'tzl'
+    elif 'oxid siřičitý' in compound:
+        return 'so2'
+    elif 'amoniak' in compound:
+        return 'amoniak'
+    else:
+        return 'ostatni'
+
 def parse_utility(url):
     """Return data about a single utility (provozovna) as a dictionary.
     """
@@ -87,9 +110,7 @@ def parse_utility(url):
     # Emissions consist of substance name and value 
     for i in range(start_emiss, end_emiss):
         key = rows[i].td.get_text()
-        key = unicodedata.normalize('NFKD', key).encode('ascii', 'ignore')
-        key = key.decode('utf-8')
-        key = key.replace(' ', '_')
+        key = choose_emission_label(key)
         try:
             value = rows[i].td.find_next_sibling().get_text()
         except AttributeError:
