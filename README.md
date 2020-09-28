@@ -1,7 +1,7 @@
 
-# Zdroje znečišťování za rok 2017
+# Zdroje znečišťování za rok 2018
 
-Scrape dat z [webu EMIS](http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html). Jde o údaje o provozovnách a emisích ohlášených v souhrnné provozní evidenci za rok 2017 na webu ČHMÚ.
+Scrape dat z [webu EMIS](http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html). Jde o údaje o provozovnách a emisích ohlášených v souhrnné provozní evidenci za rok 2018 na webu ČHMÚ.
 
 Zajištění dat ve struktuře jako na webu ve formátu CSV (včetně nevhodného sdružení některých údajů jako je provozovatel - provozovna nebo psč a obec). 
 
