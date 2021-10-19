@@ -137,7 +137,7 @@ if __name__ == '__main__':
             print(f'Zpracováno {links.index(link)} odkazů z {len(links)}')
     print(f'V seznamu je celkem {len(emis_data)} provozoven (zdrojů znečištění).')
     
-    with open('emis_data.csv', mode='w') as csvf:
+    with open('emis_2019.csv', mode='w') as csvf:
         writer = csv.writer(csvf, delimiter=',')
         writer.writerow(header)
         for util in emis_data:
