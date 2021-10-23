@@ -1,5 +1,6 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""Module for scraping emission sources from the Czech Hydrometeorological Institute.
+http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html
+"""
 
 import csv
 from dataclasses import dataclass, asdict, field, fields
@@ -32,10 +33,7 @@ class Zdroj:
     paliva: str = field(default=None)
 
     def aggregate_emissions(self, emissions_list: list) -> None:
-        """Aggegate emissions into eight most important groups. Returns a string
-        of the emission group (e.g. carbon monoxide, NH3 etc.).
-        Labels: 'tzl', 'so2', 'nox', 'co', 'voc', 'amoniak', 'co2', 'ostatni'.
-        """
+        """Aggegate emissions into eight most important groups."""
         for compound in emissions_list:
             if ('oxidy dusíku' in compound.nazev) or (
                 'oxid dusičitý' in compound.nazev
