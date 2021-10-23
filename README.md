@@ -12,3 +12,12 @@ Schází doplnit kolonku Paliva pro technologie a Přehled vyjmenovaných zdroj�
 ČHMÚ zveřejňuje také [souhrnné bilance](http://pr-asu.chmi.cz:8080/EmisBilanceView/faces/viewBilance.xhtml) za kraje pro nejdůležitější škodliviny.
 
 Autorem dat je [ČHMÚ](http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html) a jsou zveřejněna pod licencí [CC BY-NC-ND 3.0 CZ](https://creativecommons.org/licenses/by-nc-nd/3.0/cz/)
+
+
+## Použití
+
+`python3 -m venv venv`
+
+`python3 setup.py install`
+
+`emis --help`
