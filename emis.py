@@ -4,6 +4,7 @@ http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html
 
 import csv
 from dataclasses import dataclass, asdict, field, fields
+import pathlib
 import sys
 from typing import List, Tuple
 
@@ -111,8 +112,8 @@ class Emis:
 
     def to_csv(
         self,
-        filename_sources: str = 'zdroje.csv',
-        filename_emissions: str = 'emise.csv',
+        filename_sources: pathlib.Path = pathlib.Path('data') / 'zdroje.csv',
+        filename_emissions: pathlib.Path = pathlib.Path('data') / 'emise.csv',
     ):
         with open(filename_sources, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Zdroj.get_fieldnames())
@@ -281,19 +282,21 @@ def parse_utility(
 )
 def emis(links, sources):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
+    pathlib.Path('data').mkdir(exist_ok=True)
+
     if links:
         urls = gather_utilities_urls(BASE_URL, START_URL)
-        with open('linky.txt', 'w') as fin:
+        with open(pathlib.Path('data') / 'linky.txt', 'w') as fin:
             fin.writelines(url + '\n' for url in urls)
-        print(f'Loaded {len(urls)} links to emission sources')
     else:
-        with open('linky.txt') as fout:
+        with open(pathlib.Path('data') / 'linky.txt') as fout:
             urls = fout.read().splitlines()
+        print(f'Loaded {len(urls)} links to emission sources')
 
     # Extract data from all urls
     if sources:
         emis_data = Emis()
-        with click.progressbar(urls, label='Parsing', show_pos=True) as bar:
+        with click.progressbar(urls[:100], label='Parsing', show_pos=True) as bar:
             for url in bar:
                 bs = get_bs(url)
                 if bs:

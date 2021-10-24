@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import pathlib
 import pytest
 
 from emis import parse_utility, Zdroj, get_indexes, Indexes, retrieve_id
@@ -6,19 +7,19 @@ from emis import parse_utility, Zdroj, get_indexes, Indexes, retrieve_id
 
 @pytest.fixture
 def melnik_soup():
-    with open('tests/elektrarna-melnik.html') as f:
+    with open(pathlib.Path('tests/elektrarna-melnik.html')) as f:
         return BeautifulSoup(f.read(), 'html.parser')
 
 
 @pytest.fixture
 def kutnahora_soup():
-    with open('tests/ec-kutna-hora.html') as f:
+    with open(pathlib.Path('tests/ec-kutna-hora.html')) as f:
         return BeautifulSoup(f.read(), 'html.parser')
 
 
 @pytest.fixture
 def zelenarecyklace_soup():
-    with open('tests/zelena-recyklace.html') as f:
+    with open(pathlib.Path('tests/zelena-recyklace.html')) as f:
         return BeautifulSoup(f.read(), 'html.parser')
 
 
