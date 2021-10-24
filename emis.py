@@ -296,7 +296,7 @@ def emis(links, sources):
     # Extract data from all urls
     if sources:
         emis_data = Emis()
-        with click.progressbar(urls[:100], label='Parsing', show_pos=True) as bar:
+        with click.progressbar(urls, label='Parsing', show_pos=True) as bar:
             for url in bar:
                 bs = get_bs(url)
                 if bs:
