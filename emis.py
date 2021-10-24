@@ -4,10 +4,21 @@ http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html
 
 import csv
 from dataclasses import dataclass, asdict, field, fields
+import sys
+from typing import List, Tuple
 
 from bs4 import BeautifulSoup
 import click
 import requests
+
+
+BASE_URL = 'http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/'
+START_URL = (
+    'http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html'
+)
+HEADERS = {
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:83.0) Gecko/20100101 Firefox/83.0'
+}
 
 
 @dataclass
@@ -82,7 +93,7 @@ class PalivoSpalovaci:
 
 @dataclass
 class Indexes:
-    """Stores indexes of table rows containing emissions and fuels."""
+    """Stores start and end indexes of table rows containing emissions and fuels."""
 
     emise_start: int
     emise_end: int
@@ -98,63 +109,64 @@ class Emis:
     emise: list = field(default_factory=list)
     paliva: list = field(default_factory=list)
 
-    def to_csv(self):
-        with open('zdroj.csv', mode='w', newline='') as csvf:
+    def to_csv(
+        self,
+        filename_sources: str = 'zdroje.csv',
+        filename_emissions: str = 'emise.csv',
+    ):
+        with open(filename_sources, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Zdroj.get_fieldnames())
             writer.writeheader()
             for row in self.zdroje:
                 writer.writerow(asdict(row))
+        print(f'Saved {len(self.zdroje)} sources to {filename_sources}.')
 
-        with open('emise.csv', mode='w', newline='') as csvf:
+        with open(filename_emissions, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Emise.get_fieldnames())
             writer.writeheader()
             for row in self.emise:
                 writer.writerow(asdict(row))
+        print(f'Saved {len(self.emise)} emissions to {filename_emissions}.')
 
 
-def get_bs(url):
-    """Return list of all links from a single webpage (table with kraje and okresy
-    on EMIS website).
-    """
-    r = requests.get(url)
-    r.encoding = 'utf-8'
-    bs = BeautifulSoup(r.text, 'html.parser')
-    return bs
+def get_bs(url: str) -> BeautifulSoup:
+    """Request page and make a soup."""
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=7)
+        r.encoding = 'utf-8'
+        bs = BeautifulSoup(r.text, 'html.parser')
+        return bs
+    except requests.exceptions.ConnectionError:
+        print(f'Cannot reach {url}')
+        print('Moving on...')
+        return None
 
 
-def get_links(bs):
-    """Return list of links found on the page.
-    bs: BeautifulSoup object
-    """
+def get_links(bs: BeautifulSoup) -> List[str]:
+    """Return list of links found on the page."""
     links = bs.find('table', {'class': 'data_table'}).find_all('a')
     links = [link.attrs['href'] for link in links]
     return links
 
 
-def has_utilities(bs):
-    """Return True if bs (BeautifulSoup object) contanins list of utilities."""
-    if bs.find('h2', text='Seznam provozoven'):
-        return True
-    return False
+def gather_utilities_urls(base_url: str, index_url: str) -> List[str]:
+    """Return url of each utility (emission source) as a list."""
+    kraje_links = get_links(get_bs(index_url))
+    okresy_links = []
+    links = []
+    # Praha is without okres level
+    okresy_links.append(kraje_links[0])
+    for kraj_link in kraje_links[1:]:
+        okresy_links.extend(get_links(get_bs(base_url + kraj_link)))
+    for okres_link in okresy_links:
+        links.extend(get_links(get_bs(base_url + okres_link)))
+    print(f'Scraped {len(links)} links to emission sources.')
+    # Add base url to scraped slugs
+    links = [base_url + link for link in links]
+    return links
 
 
-def gather_links(base_url, urls, gathered):
-    """Walk through the website and return only links from pages with utilities.
-    base_url: domain url (string)
-    urls: links to search through (list of strings)
-    gathered: links (list of strings)
-    """
-    for url in urls:
-        bs = get_bs(base_url + url)
-        links = get_links(bs)
-        if has_utilities(bs):
-            gathered.extend(links)
-        else:
-            gather_links(base_url, links, gathered)
-    return gathered
-
-
-def get_indexes(bs):
+def get_indexes(bs: BeautifulSoup) -> Indexes:
     # Emissions (emise) and fuels (paliva) do not have a specified number of rows
     table = bs.find('table', {'class': 'data_table'})
 
@@ -173,19 +185,28 @@ def get_indexes(bs):
     return Indexes(start_emiss, end_emiss, start_fuels, end_fuels)
 
 
-def retrieve_id(url):
+def retrieve_id(url: str) -> str:
+    """Prepare id from url."""
     return int(url.split('/')[-1].strip('_CZ.html'))
 
 
-def to_float(num_as_string):
+def to_float(num_as_string: str) -> float:
+    """Make float from string which represents some number.
+    >>> to_float('2,99')
+    2.99
+    >>> to_float('3 523,25')
+    3523.25
+    """
     try:
         return float(num_as_string.replace(',', '.').replace(' ', ''))
     except ValueError:
         return None
 
 
-def parse_utility(bs: BeautifulSoup, url: str) -> tuple:
-    """Return parsed utility as a tuple of one source, list of emissions and list of fuels."""
+def parse_utility(
+    bs: BeautifulSoup, url: str
+) -> Tuple[Zdroj, List[Emise], List[PalivoSpalovaci]]:
+    """Return parsed utility as a tuple of single source, list of emissions and list of fuels."""
     table = bs.find('table', {'class': 'data_table'})
     rows = table.find_all('tr')
 
@@ -247,45 +268,44 @@ def parse_utility(bs: BeautifulSoup, url: str) -> tuple:
     return zdroj, emise, paliva
 
 
-def prepare_links(base_url, urls, filename='link.txt'):
-    links = gather_links(base_url, urls, [])
-    with open(filename, 'w') as fout:
-        fout.writelines(link + '\n' for link in links)
-    print(f'There is {len(links)} emission sources.')
-    return links
-
-
 @click.command()
 @click.option(
     '--links/--no-links',
     default=True,
     help='Scrape partial urls to facilities first (default: True)',
 )
-def emis(links):
+@click.option(
+    '--sources/--no-sources',
+    default=False,
+    help='Scrape data about emission sources (default: False)',
+)
+def emis(links, sources):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
-    base_url = 'http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/'
-    partial_links = ['index_CZ.html']
-
     if links:
-        partial_links = prepare_links(base_url, partial_links)
+        urls = gather_utilities_urls(BASE_URL, START_URL)
+        with open('linky.txt', 'w') as fin:
+            fin.writelines(url + '\n' for url in urls)
+        print(f'Loaded {len(urls)} links to emission sources')
     else:
-        with open('link.txt') as fout:
-            partial_links = fout.read().splitlines()
-
-    links = [base_url + partial for partial in partial_links]
+        with open('linky.txt') as fout:
+            urls = fout.read().splitlines()
 
     # Extract data from all urls
-    emis_data = Emis()
-
-    with click.progressbar(links, label='Parsing', show_pos=True) as bar:
-        for link in bar:
-            bs = get_bs(link)
-            zdroj, emise, paliva = parse_utility(bs, link)
-            emis_data.zdroje.append(zdroj)
-            emis_data.emise.extend(emise)
-            emis_data.paliva.extend(paliva)
-
-    emis_data.to_csv()
+    if sources:
+        emis_data = Emis()
+        with click.progressbar(urls, label='Parsing', show_pos=True) as bar:
+            for url in bar:
+                bs = get_bs(url)
+                if bs:
+                    zdroj, emise, paliva = parse_utility(bs, url)
+                    emis_data.zdroje.append(zdroj)
+                    emis_data.emise.extend(emise)
+                    emis_data.paliva.extend(paliva)
+        print(f'Parsed {len(emis_data.zdroje)} emission sources')
+        emis_data.to_csv()
+    else:
+        print('Nothing to do. See the options with emis --help')
+        sys.exit()
 
 
 if __name__ == '__main__':
