@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import pathlib
 import pytest
 
-from emis import parse_utility, Zdroj, get_indexes, Indexes, retrieve_id
+from emis import parse_utility, Zdroj, get_indexes, Indexes, retrieve_id, retrieve_nuts3
 
 
 @pytest.fixture
@@ -36,6 +36,11 @@ def test_retrieve_id_melnik():
     assert retrieve_id(url) == 643750021
 
 
+def test_retrieve_nuts3_melnik():
+    url = 'https://www.chmi.cz/files/portal/docs/uoco/web_generator/plants/CZ020/643750021_CZ.html'
+    assert retrieve_nuts3(url) == 'CZ020'
+
+
 def test_parse_utility_melnik(melnik_soup):
     url = 'https://www.chmi.cz/files/portal/docs/uoco/web_generator/plants/CZ020/643750021_CZ.html'
 
@@ -44,6 +49,7 @@ def test_parse_utility_melnik(melnik_soup):
     assert zdroj.id == 643750021
     assert zdroj.nazev == 'ČEZ, a. s. - Elektrárna Mělník'
     assert zdroj.nace == '351100'
+    assert zdroj.nuts3 == 'CZ020'
     assert zdroj.ulice_cp == '255'
     assert zdroj.psc_obec == '277 03 Horní Počaply'
     assert zdroj.adm == '26788497'
@@ -85,6 +91,7 @@ def test_parse_utility_kutnahora(kutnahora_soup):
     assert zdroj.id == 677718061
     assert zdroj.nazev == 'EC Kutná Hora s.r.o.'
     assert zdroj.nace == '351100'
+    assert zdroj.nuts3 == 'CZ020'
     assert zdroj.ulice_cp == '197'
     assert zdroj.psc_obec == '284 01 Kutná Hora'
     assert zdroj.prikon == 25.8
@@ -119,6 +126,7 @@ def test_parse_utility_zelenarecyklace(zelenarecyklace_soup):
     assert zdroj.id == 697620033
     assert zdroj.nazev == 'ZELENÁ RECYKLACE s.r.o.'
     assert zdroj.nace == '000000'
+    assert zdroj.nuts3 == 'CZ020'
     assert zdroj.ulice_cp == 'Pražská 1163'
     assert zdroj.psc_obec == '252 10 Mníšek pod Brdy'
     assert zdroj.prikon == None

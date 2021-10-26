@@ -5,17 +5,19 @@ http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html
 import csv
 from dataclasses import dataclass, asdict, field, fields
 import pathlib
+import socket
 import sys
 from typing import List, Tuple
 
 from bs4 import BeautifulSoup
 import click
 import requests
+from requests.adapters import HTTPAdapter
 
 
-BASE_URL = 'http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/'
+BASE_URL = 'https://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/'
 START_URL = (
-    'http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html'
+    'https://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html'
 )
 HEADERS = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:83.0) Gecko/20100101 Firefox/83.0'
@@ -29,6 +31,7 @@ class Zdroj:
     id: int
     nazev: str = field(default=None)
     nace: str = field(default=None)
+    nuts3: str = field(default=None)
     ulice_cp: str = field(default=None)
     psc_obec: str = field(default=None)
     souradnice: str = field(default=None)
@@ -130,16 +133,15 @@ class Emis:
         print(f'Saved {len(self.emise)} emissions to {filename_emissions}.')
 
 
-def get_bs(url: str) -> BeautifulSoup:
+def get_bs(session: requests.Session, url: str) -> BeautifulSoup:
     """Request page and make a soup."""
     try:
-        r = requests.get(url, headers=HEADERS, timeout=7)
+        r = session.get(url, headers=HEADERS, timeout=15)
         r.encoding = 'utf-8'
         bs = BeautifulSoup(r.text, 'html.parser')
         return bs
-    except requests.exceptions.ConnectionError:
+    except (requests.exceptions.RequestException, socket.timeout):
         print(f'Cannot reach {url}')
-        print('Moving on...')
         return None
 
 
@@ -150,17 +152,19 @@ def get_links(bs: BeautifulSoup) -> List[str]:
     return links
 
 
-def gather_utilities_urls(base_url: str, index_url: str) -> List[str]:
+def gather_utilities_urls(
+    session: requests.Session, base_url: str, index_url: str
+) -> List[str]:
     """Return url of each utility (emission source) as a list."""
-    kraje_links = get_links(get_bs(index_url))
+    kraje_links = get_links(get_bs(session, index_url))
     okresy_links = []
     links = []
     # Praha is without okres level
     okresy_links.append(kraje_links[0])
     for kraj_link in kraje_links[1:]:
-        okresy_links.extend(get_links(get_bs(base_url + kraj_link)))
+        okresy_links.extend(get_links(get_bs(session, base_url + kraj_link)))
     for okres_link in okresy_links:
-        links.extend(get_links(get_bs(base_url + okres_link)))
+        links.extend(get_links(get_bs(session, base_url + okres_link)))
     print(f'Scraped {len(links)} links to emission sources.')
     # Add base url to scraped slugs
     links = [base_url + link for link in links]
@@ -189,6 +193,11 @@ def get_indexes(bs: BeautifulSoup) -> Indexes:
 def retrieve_id(url: str) -> str:
     """Prepare id from url."""
     return int(url.split('/')[-1].strip('_CZ.html'))
+
+
+def retrieve_nuts3(url: str) -> str:
+    """Prepare nuts3 code from url."""
+    return url.split('/')[-2]
 
 
 def to_float(num_as_string: str) -> float:
@@ -221,6 +230,7 @@ def parse_utility(
     zdroj = Zdroj(id=zdroj_id)
     palivo_spal = PalivoSpalovaci(zdroj_id=zdroj_id)
 
+    zdroj.nuts3 = retrieve_nuts3(url)
     zdroj.nazev = table.find('td', text='Název:').find_next_sibling().get_text()
     zdroj.nace = table.find('td', text='NACE:').find_next_sibling().get_text()
     zdroj.ulice_cp = (
@@ -284,8 +294,11 @@ def emis(links, sources):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
     pathlib.Path('data').mkdir(exist_ok=True)
 
+    s = requests.Session()
+    s.mount('https://portal.chmi.cz', HTTPAdapter(max_retries=5))
+
     if links:
-        urls = gather_utilities_urls(BASE_URL, START_URL)
+        urls = gather_utilities_urls(s, BASE_URL, START_URL)
         with open(pathlib.Path('data') / 'linky.txt', 'w') as fin:
             fin.writelines(url + '\n' for url in urls)
     else:
@@ -298,7 +311,7 @@ def emis(links, sources):
         emis_data = Emis()
         with click.progressbar(urls, label='Parsing', show_pos=True) as bar:
             for url in bar:
-                bs = get_bs(url)
+                bs = get_bs(s, url)
                 if bs:
                     zdroj, emise, paliva = parse_utility(bs, url)
                     emis_data.zdroje.append(zdroj)
