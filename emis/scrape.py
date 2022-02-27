@@ -34,7 +34,7 @@ class Zdroj:
     nuts3: str = field(default=None)
     ulice_cp: str = field(default=None)
     psc_obec: str = field(default=None)
-    souradnice: str = field(default=None)
+    # souradnice: str = field(default=None)
     adm: str = field(default=None)
     prikon: float = field(default=None)
     nox: float = field(default=0)
@@ -153,7 +153,7 @@ def get_links(bs: BeautifulSoup) -> List[str]:
 
 
 def gather_utilities_urls(
-    session: requests.Session, base_url: str, index_url: str
+    session: requests.Session, base_url: str = BASE_URL, index_url: str = START_URL
 ) -> List[str]:
     """Return url of each utility (emission source) as a list."""
     kraje_links = get_links(get_bs(session, index_url))
@@ -237,9 +237,9 @@ def parse_utility(
         table.find('td', text='Ulice, č.p./č.o.:').find_next_sibling().get_text()
     )
     zdroj.psc_obec = table.find('td', text='PSČ, Obec:').find_next_sibling().get_text()
-    zdroj.souradnice = (
-        table.find('td', text='Zeměpisné souřadnice:').find_next_sibling().get_text()
-    )
+    # zdroj.souradnice = (
+    #     table.find('td', text='Zeměpisné souřadnice:').find_next_sibling().get_text()
+    # )
     zdroj.prikon = to_float(
         table.find('td', text='Celkový příkon provozovny [MW]: ')
         .find_next_sibling()
@@ -277,52 +277,3 @@ def parse_utility(
         zdroj.paliva = ';'.join(palivo.nazev for palivo in paliva)
 
     return zdroj, emise, paliva
-
-
-@click.command()
-@click.option(
-    '--links/--no-links',
-    default=True,
-    help='Scrape partial urls to facilities first (default: True)',
-)
-@click.option(
-    '--sources/--no-sources',
-    default=False,
-    help='Scrape data about emission sources (default: False)',
-)
-def emis(links, sources):
-    """Scrape emission sources from Czech Hydrometeorological Institute."""
-    pathlib.Path('data').mkdir(exist_ok=True)
-
-    s = requests.Session()
-    s.mount('https://portal.chmi.cz', HTTPAdapter(max_retries=5))
-
-    if links:
-        urls = gather_utilities_urls(s, BASE_URL, START_URL)
-        with open(pathlib.Path('data') / 'linky.txt', 'w') as fin:
-            fin.writelines(url + '\n' for url in urls)
-    else:
-        with open(pathlib.Path('data') / 'linky.txt') as fout:
-            urls = fout.read().splitlines()
-        print(f'Loaded {len(urls)} links to emission sources')
-
-    # Extract data from all urls
-    if sources:
-        emis_data = Emis()
-        with click.progressbar(urls, label='Parsing', show_pos=True) as bar:
-            for url in bar:
-                bs = get_bs(s, url)
-                if bs:
-                    zdroj, emise, paliva = parse_utility(bs, url)
-                    emis_data.zdroje.append(zdroj)
-                    emis_data.emise.extend(emise)
-                    emis_data.paliva.extend(paliva)
-        print(f'Parsed {len(emis_data.zdroje)} emission sources')
-        emis_data.to_csv()
-    else:
-        print('Nothing to do. See the options with emis --help')
-        sys.exit()
-
-
-if __name__ == '__main__':
-    emis()

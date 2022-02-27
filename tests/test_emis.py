@@ -2,7 +2,14 @@ from bs4 import BeautifulSoup
 import pathlib
 import pytest
 
-from emis import parse_utility, Zdroj, get_indexes, Indexes, retrieve_id, retrieve_nuts3
+from emis.scrape import (
+    parse_utility,
+    Zdroj,
+    get_indexes,
+    Indexes,
+    retrieve_id,
+    retrieve_nuts3,
+)
 
 
 @pytest.fixture
@@ -24,11 +31,11 @@ def zelenarecyklace_soup():
 
 
 def test_get_indexes_melnik(melnik_soup):
-    assert get_indexes(melnik_soup) == Indexes(9, 24, 27, 32)
+    assert get_indexes(melnik_soup) == Indexes(8, 23, 26, 31)
 
 
 def test_get_indexes_kutnahora(kutnahora_soup):
-    assert get_indexes(kutnahora_soup) == Indexes(9, 13, 16, 17)
+    assert get_indexes(kutnahora_soup) == Indexes(8, 12, 15, 16)
 
 
 def test_retrieve_id_melnik():
@@ -53,7 +60,7 @@ def test_parse_utility_melnik(melnik_soup):
     assert zdroj.ulice_cp == '255'
     assert zdroj.psc_obec == '277 03 Horní Počaply'
     assert zdroj.adm == '26788497'
-    assert zdroj.souradnice == '50° 24´ 55.912" sš 14° 25´ 8.207" vd'
+    # assert zdroj.souradnice == '50° 24´ 55.912" sš 14° 25´ 8.207" vd'
     assert zdroj.prikon == 1976.5
 
     assert zdroj.tzl == 227.555
