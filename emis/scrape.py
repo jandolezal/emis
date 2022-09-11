@@ -231,23 +231,20 @@ def parse_utility(
     palivo_spal = PalivoSpalovaci(zdroj_id=zdroj_id)
 
     zdroj.nuts3 = retrieve_nuts3(url)
-    zdroj.nazev = table.find('td', text='Název:').find_next_sibling().get_text()
-    zdroj.nace = table.find('td', text='NACE:').find_next_sibling().get_text()
+    zdroj.nazev = table.find('td', string='Název:').find_next_sibling().get_text()
+    zdroj.nace = table.find('td', string='NACE:').find_next_sibling().get_text()
     zdroj.ulice_cp = (
-        table.find('td', text='Ulice, č.p./č.o.:').find_next_sibling().get_text()
+        table.find('td', string='Ulice, č.p./č.o.:').find_next_sibling().get_text()
     )
-    zdroj.psc_obec = table.find('td', text='PSČ, Obec:').find_next_sibling().get_text()
-    # zdroj.souradnice = (
-    #     table.find('td', text='Zeměpisné souřadnice:').find_next_sibling().get_text()
-    # )
+    zdroj.psc_obec = table.find('td', string='PSČ, Obec:').find_next_sibling().get_text()
     zdroj.prikon = to_float(
-        table.find('td', text='Celkový příkon provozovny [MW]: ')
+        table.find('td', string='Celkový příkon provozovny [MW]: ')
         .find_next_sibling()
         .get_text()
     )
     try:
         zdroj.adm = (
-            table.find('td', text='Adresní místo (ADM):')
+            table.find('td', string='Adresní místo (ADM):')
             .find_next_sibling()
             .a.get_text()
         )
