@@ -22,17 +22,17 @@ from .scrape import get_bs, parse_utility, gather_utilities_urls, Emis
 )
 def main(links, sources):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
-    pathlib.Path('data').mkdir(exist_ok=True)
+    pathlib.Path('data/2020').mkdir(exist_ok=True)
 
     s = requests.Session()
     s.mount('https://portal.chmi.cz', HTTPAdapter(max_retries=5))
 
     if links:
         urls = gather_utilities_urls(s)
-        with open(pathlib.Path('data') / 'linky.txt', 'w') as fin:
+        with open(pathlib.Path('data/2020/linky.txt'), 'w') as fin:
             fin.writelines(url + '\n' for url in urls)
     else:
-        with open(pathlib.Path('data') / 'linky.txt') as fout:
+        with open(pathlib.Path('data/2020/linky.txt')) as fout:
             urls = fout.read().splitlines()
         print(f'Loaded {len(urls)} links to emission sources')
 

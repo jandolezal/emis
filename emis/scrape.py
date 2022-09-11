@@ -115,8 +115,8 @@ class Emis:
 
     def to_csv(
         self,
-        filename_sources: pathlib.Path = pathlib.Path('data') / 'zdroje.csv',
-        filename_emissions: pathlib.Path = pathlib.Path('data') / 'emise.csv',
+        filename_sources: pathlib.Path = pathlib.Path('data/2020/zdroje.csv'),
+        filename_emissions: pathlib.Path = pathlib.Path('data/2020/emise.csv'),
     ):
         with open(filename_sources, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Zdroj.get_fieldnames())
