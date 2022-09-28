@@ -7,7 +7,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 
-from .scrape import get_bs, parse_utility, gather_utilities_urls, Emis
+from .scrape import get_bs, parse_utility, gather_utilities_urls, Emis, RUIAN_URL
 
 
 @click.command()
@@ -21,7 +21,12 @@ from .scrape import get_bs, parse_utility, gather_utilities_urls, Emis
     default=False,
     help='Scrape data about emission sources (default: False)',
 )
-def main(links, sources):
+@click.option(
+    '--ruian/--no-ruian',
+    default=False,
+    help='Request address and coordinates data from RUIAN API (default: False)',
+)
+def main(links, sources, ruian):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
 
     logging.basicConfig(
@@ -48,7 +53,7 @@ def main(links, sources):
     # Extract data from all urls
     if sources:
         emis_data = Emis()
-        with click.progressbar(urls, label='Parsing', show_pos=True) as bar:
+        with click.progressbar(urls[:100], label='Parsing sources', show_pos=True) as bar:
             for url in bar:
                 bs = get_bs(s, url)
                 if bs:
@@ -57,6 +62,20 @@ def main(links, sources):
                     emis_data.emise.extend(emise)
                     emis_data.paliva.extend(paliva)
         logging.info(f'Parsed {len(emis_data.zdroje)} emission sources')
+        if ruian:
+            ruian_session = requests.Session()
+            ruian_session.mount(RUIAN_URL, HTTPAdapter(max_retries=5))
+            with click.progressbar(
+                emis_data.zdroje, label='Updating geodata from RUIAN', show_pos=True
+            ) as bar:
+                for zdroj in bar:
+                    # If we have Adresní místo, request coordinates and compile address from RUIAN API
+                    if zdroj.adm:
+                        zdroj.request_address(ruian_session)
+                        zdroj.request_coordinates(ruian_session)
+                        if zdroj.jtskx and zdroj.jtsky:
+                            zdroj.transform_coordinates()  # transform from Krovak to WGS84
+            logging.info(f'Updated {len(emis_data.zdroje)} emission sources')
         emis_data.to_csv()
     else:
         logging.info('Nothing to do. See the options with emis --help')

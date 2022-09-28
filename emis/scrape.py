@@ -24,9 +24,9 @@ START_URL = (
 HEADERS = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:83.0) Gecko/20100101 Firefox/83.0'
 }
-RUIAN_URL = 'http://www.vugtk.cz/euradin/ruian/rest.py/'
-RUIAN_COMPILE_ADDRESS = RUIAN_URL + 'CompileAddress/json/'
-RUIAN_GEOCODE = RUIAN_URL + 'Geocode/json/'
+RUIAN_URL = 'http://www.vugtk.cz/'
+RUIAN_COMPILE_ADDRESS = RUIAN_URL + 'euradin/ruian/rest.py/CompileAddress/json/'
+RUIAN_GEOCODE = RUIAN_URL + 'euradin/ruian/rest.py/Geocode/json/'
 
 
 @dataclass
@@ -84,8 +84,8 @@ class Zdroj:
             else:
                 self.ostatni = self.ostatni + compound.mnozstvi
 
-    def request_address(self) -> None:
-        resp = requests.get(
+    def request_address(self, session: requests.Session) -> None:
+        resp = session.get(
             RUIAN_COMPILE_ADDRESS,
             params={'AddressPlaceId': self.adm, 'ExtraInformation': 'standard'},
         )
@@ -103,8 +103,8 @@ class Zdroj:
             except requests.JSONDecodeError as e:
                 logging.warning(f'Cannot process address for {self.id} due to: {e}')
 
-    def request_coordinates(self) -> None:
-        resp = requests.get(
+    def request_coordinates(self, session: requests.Session) -> None:
+        resp = session.get(
             RUIAN_GEOCODE,
             params={'AddressPlaceId': self.adm, 'ExtraInformation': 'standard'},
         )
@@ -305,15 +305,6 @@ def parse_utility(
         )
     except AttributeError:
         pass
-
-    # If we have Adresní místo, request coordinates and compile address from RUIAN API
-    if zdroj.adm:
-        zdroj.request_address()
-
-        zdroj.request_coordinates()
-
-        if zdroj.jtskx and zdroj.jtsky:
-            zdroj.transform_coordinates()  # transform from Krovak to WGS84
 
     for i in range(indexes.emise_start, indexes.emise_end):
         try:
