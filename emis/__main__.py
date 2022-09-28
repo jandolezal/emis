@@ -1,3 +1,4 @@
+import logging
 import pathlib
 import sys
 
@@ -22,6 +23,14 @@ from .scrape import get_bs, parse_utility, gather_utilities_urls, Emis
 )
 def main(links, sources):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
+
+    logging.basicConfig(
+        filename='emis.log',
+        level=logging.INFO,
+        format='%(levelname)s %(asctime)s:%(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+    )
+
     pathlib.Path('data/2020').mkdir(exist_ok=True)
 
     s = requests.Session()
@@ -34,7 +43,7 @@ def main(links, sources):
     else:
         with open(pathlib.Path('data/2020/linky.txt')) as fout:
             urls = fout.read().splitlines()
-        print(f'Loaded {len(urls)} links to emission sources')
+        logging.info(f'Loaded {len(urls)} links to emission sources')
 
     # Extract data from all urls
     if sources:
@@ -47,10 +56,10 @@ def main(links, sources):
                     emis_data.zdroje.append(zdroj)
                     emis_data.emise.extend(emise)
                     emis_data.paliva.extend(paliva)
-        print(f'Parsed {len(emis_data.zdroje)} emission sources')
+        logging.info(f'Parsed {len(emis_data.zdroje)} emission sources')
         emis_data.to_csv()
     else:
-        print('Nothing to do. See the options with emis --help')
+        logging.info('Nothing to do. See the options with emis --help')
         sys.exit()
 
 

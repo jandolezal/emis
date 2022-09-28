@@ -4,6 +4,7 @@ http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html
 
 import csv
 from dataclasses import dataclass, asdict, field, fields
+import logging
 import pathlib
 import socket
 import sys
@@ -11,6 +12,7 @@ from typing import List, Tuple
 
 from bs4 import BeautifulSoup
 import click
+from pyproj import Transformer
 import requests
 from requests.adapters import HTTPAdapter
 
@@ -22,6 +24,9 @@ START_URL = (
 HEADERS = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:83.0) Gecko/20100101 Firefox/83.0'
 }
+RUIAN_URL = 'http://www.vugtk.cz/euradin/ruian/rest.py/'
+RUIAN_COMPILE_ADDRESS = RUIAN_URL + 'CompileAddress/json/'
+RUIAN_GEOCODE = RUIAN_URL + 'Geocode/json/'
 
 
 @dataclass
@@ -34,8 +39,18 @@ class Zdroj:
     nuts3: str = field(default=None)
     ulice_cp: str = field(default=None)
     psc_obec: str = field(default=None)
-    # souradnice: str = field(default=None)
     adm: str = field(default=None)
+    ulice: str = field(default=None)
+    cp: str = field(default=None)
+    orientacni: str = field(default=None)
+    cast: str = field(default=None)
+    obvod: str = field(default=None)
+    obec: str = field(default=None)
+    psc: str = field(default=None)
+    jtsky: float = field(default=None)
+    jtskx: float = field(default=None)
+    lat: float = field(default=None)
+    lon: float = field(default=None)
     prikon: float = field(default=None)
     nox: float = field(default=0)
     so2: float = field(default=0)
@@ -68,6 +83,44 @@ class Zdroj:
                 self.amoniak = self.amoniak + compound.mnozstvi
             else:
                 self.ostatni = self.ostatni + compound.mnozstvi
+
+    def request_address(self) -> None:
+        resp = requests.get(
+            RUIAN_COMPILE_ADDRESS,
+            params={'AddressPlaceId': self.adm, 'ExtraInformation': 'standard'},
+        )
+        if resp.ok:
+            try:
+                data = resp.json().get('FormattedOutput1')
+                if data:
+                    self.ulice = data.get('ulice')
+                    self.cp = data.get('č.p.')
+                    self.orientacni = data.get('orientační_číslo')
+                    self.obvod = data.get('číslo_městského_obvodu')
+                    self.cast = data.get('část_obce')
+                    self.obec = data.get('obec')
+                    self.psc = data.get('PSČ')
+            except requests.JSONDecodeError as e:
+                logging.warning(f'Cannot process address for {self.id} due to: {e}')
+
+    def request_coordinates(self) -> None:
+        resp = requests.get(
+            RUIAN_GEOCODE,
+            params={'AddressPlaceId': self.adm, 'ExtraInformation': 'standard'},
+        )
+        if resp.ok:
+            try:
+                records = resp.json().get('records')
+                if records:
+                    self.jtskx = records[0]['JTSKX']
+                    self.jtsky = records[0]['JTSKY']
+            except requests.JSONDecodeError as e:
+                logging.warning(f'Cannot process coordinates for {self.id} due to: {e}')
+
+    def transform_coordinates(self) -> None:
+        '''Transform coordinates from Krovak to WGS84.'''
+        transformer = Transformer.from_crs(5513, 4326, always_xy=True)
+        self.lon, self.lat = transformer.transform(self.jtskx, self.jtsky)
 
     @classmethod
     def get_fieldnames(cls) -> list:
@@ -123,14 +176,14 @@ class Emis:
             writer.writeheader()
             for row in self.zdroje:
                 writer.writerow(asdict(row))
-        print(f'Saved {len(self.zdroje)} sources to {filename_sources}.')
+        logging.info(f'Saved {len(self.zdroje)} sources to {filename_sources}.')
 
         with open(filename_emissions, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Emise.get_fieldnames())
             writer.writeheader()
             for row in self.emise:
                 writer.writerow(asdict(row))
-        print(f'Saved {len(self.emise)} emissions to {filename_emissions}.')
+        logging.info(f'Saved {len(self.emise)} emissions to {filename_emissions}.')
 
 
 def get_bs(session: requests.Session, url: str) -> BeautifulSoup:
@@ -141,7 +194,7 @@ def get_bs(session: requests.Session, url: str) -> BeautifulSoup:
         bs = BeautifulSoup(r.text, 'html.parser')
         return bs
     except (requests.exceptions.RequestException, socket.timeout):
-        print(f'Cannot reach {url}')
+        logging.warning(f'Cannot reach {url}')
         return None
 
 
@@ -165,7 +218,7 @@ def gather_utilities_urls(
         okresy_links.extend(get_links(get_bs(session, base_url + kraj_link)))
     for okres_link in okresy_links:
         links.extend(get_links(get_bs(session, base_url + okres_link)))
-    print(f'Scraped {len(links)} links to emission sources.')
+    logging.info(f'Scraped {len(links)} links to emission sources.')
     # Add base url to scraped slugs
     links = [base_url + link for link in links]
     return links
@@ -236,7 +289,9 @@ def parse_utility(
     zdroj.ulice_cp = (
         table.find('td', string='Ulice, č.p./č.o.:').find_next_sibling().get_text()
     )
-    zdroj.psc_obec = table.find('td', string='PSČ, Obec:').find_next_sibling().get_text()
+    zdroj.psc_obec = (
+        table.find('td', string='PSČ, Obec:').find_next_sibling().get_text()
+    )
     zdroj.prikon = to_float(
         table.find('td', string='Celkový příkon provozovny [MW]: ')
         .find_next_sibling()
@@ -250,6 +305,15 @@ def parse_utility(
         )
     except AttributeError:
         pass
+
+    # If we have Adresní místo, request coordinates and compile address from RUIAN API
+    if zdroj.adm:
+        zdroj.request_address()
+
+        zdroj.request_coordinates()
+
+        if zdroj.jtskx and zdroj.jtsky:
+            zdroj.transform_coordinates()  # transform from Krovak to WGS84
 
     for i in range(indexes.emise_start, indexes.emise_end):
         try:
