@@ -24,7 +24,7 @@ from .scrape import get_bs, parse_utility, gather_utilities_urls, Emis, RUIAN_UR
 @click.option(
     '--ruian/--no-ruian',
     default=False,
-    help='Request address and coordinates data from RUIAN API (default: False)',
+    help='Request coordinates data from RUIAN API (default: False)',
 )
 def main(links, sources, ruian):
     """Scrape emission sources from Czech Hydrometeorological Institute."""
@@ -53,7 +53,7 @@ def main(links, sources, ruian):
     # Extract data from all urls
     if sources:
         emis_data = Emis()
-        with click.progressbar(urls[:100], label='Parsing sources', show_pos=True) as bar:
+        with click.progressbar(urls, label='Parsing sources', show_pos=True) as bar:
             for url in bar:
                 bs = get_bs(s, url)
                 if bs:
@@ -66,14 +66,13 @@ def main(links, sources, ruian):
             ruian_session = requests.Session()
             ruian_session.mount(RUIAN_URL, HTTPAdapter(max_retries=5))
             with click.progressbar(
-                emis_data.zdroje, label='Updating geodata from RUIAN', show_pos=True
+                emis_data.zdroje, label='Adding coordinates from RUIAN', show_pos=True
             ) as bar:
                 for zdroj in bar:
-                    # If we have Adresní místo, request coordinates and compile address from RUIAN API
+                    # If we have Adresní místo, request coordinates from RUIAN API
                     if zdroj.adm:
-                        zdroj.request_address(ruian_session)
                         zdroj.request_coordinates(ruian_session)
-                        if zdroj.jtskx and zdroj.jtsky:
+                        if zdroj.x and zdroj.y:
                             zdroj.transform_coordinates()  # transform from Krovak to WGS84
             logging.info(f'Updated {len(emis_data.zdroje)} emission sources')
         emis_data.to_csv()

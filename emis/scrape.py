@@ -24,9 +24,11 @@ START_URL = (
 HEADERS = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:83.0) Gecko/20100101 Firefox/83.0'
 }
-RUIAN_URL = 'http://www.vugtk.cz/'
-RUIAN_COMPILE_ADDRESS = RUIAN_URL + 'euradin/ruian/rest.py/CompileAddress/json/'
-RUIAN_GEOCODE = RUIAN_URL + 'euradin/ruian/rest.py/Geocode/json/'
+RUIAN_URL = 'https://ags.cuzk.cz/'
+RUIAN_ADM_URL = (
+    RUIAN_URL
+    + 'arcgis/rest/services/RUIAN/Vyhledavaci_sluzba_nad_daty_RUIAN/MapServer/1/query'
+)
 
 
 @dataclass
@@ -40,15 +42,8 @@ class Zdroj:
     ulice_cp: str = field(default=None)
     psc_obec: str = field(default=None)
     adm: str = field(default=None)
-    ulice: str = field(default=None)
-    cp: str = field(default=None)
-    orientacni: str = field(default=None)
-    cast: str = field(default=None)
-    obvod: str = field(default=None)
-    obec: str = field(default=None)
-    psc: str = field(default=None)
-    jtsky: float = field(default=None)
-    jtskx: float = field(default=None)
+    x: float = field(default=None)
+    y: float = field(default=None)
     lat: float = field(default=None)
     lon: float = field(default=None)
     prikon: float = field(default=None)
@@ -84,43 +79,21 @@ class Zdroj:
             else:
                 self.ostatni = self.ostatni + compound.mnozstvi
 
-    def request_address(self, session: requests.Session) -> None:
-        resp = session.get(
-            RUIAN_COMPILE_ADDRESS,
-            params={'AddressPlaceId': self.adm, 'ExtraInformation': 'standard'},
-        )
-        if resp.ok:
-            try:
-                data = resp.json().get('FormattedOutput1')
-                if data:
-                    self.ulice = data.get('ulice')
-                    self.cp = data.get('č.p.')
-                    self.orientacni = data.get('orientační_číslo')
-                    self.obvod = data.get('číslo_městského_obvodu')
-                    self.cast = data.get('část_obce')
-                    self.obec = data.get('obec')
-                    self.psc = data.get('PSČ')
-            except requests.JSONDecodeError as e:
-                logging.warning(f'Cannot process address for {self.id} due to: {e}')
-
     def request_coordinates(self, session: requests.Session) -> None:
         resp = session.get(
-            RUIAN_GEOCODE,
-            params={'AddressPlaceId': self.adm, 'ExtraInformation': 'standard'},
+            RUIAN_ADM_URL,
+            params={'where': 'kod={}'.format(self.adm), 'f': 'json'},
         )
         if resp.ok:
-            try:
-                records = resp.json().get('records')
-                if records:
-                    self.jtskx = records[0]['JTSKX']
-                    self.jtsky = records[0]['JTSKY']
-            except requests.JSONDecodeError as e:
-                logging.warning(f'Cannot process coordinates for {self.id} due to: {e}')
+            features = resp.json().get('features')
+            if features:
+                self.x = features[0].get('geometry').get('x')
+                self.y = features[0].get('geometry').get('y')
 
     def transform_coordinates(self) -> None:
         '''Transform coordinates from Krovak to WGS84.'''
-        transformer = Transformer.from_crs(5513, 4326, always_xy=True)
-        self.lon, self.lat = transformer.transform(self.jtskx, self.jtsky)
+        transformer = Transformer.from_crs(5514, 4326, always_xy=True)
+        self.lon, self.lat = transformer.transform(self.x, self.y)
 
     @classmethod
     def get_fieldnames(cls) -> list:
