@@ -4,6 +4,7 @@ http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html
 
 import csv
 from dataclasses import dataclass, asdict, field, fields
+import logging
 import pathlib
 import socket
 import sys
@@ -11,6 +12,7 @@ from typing import List, Tuple
 
 from bs4 import BeautifulSoup
 import click
+from pyproj import Transformer
 import requests
 from requests.adapters import HTTPAdapter
 
@@ -22,6 +24,11 @@ START_URL = (
 HEADERS = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:83.0) Gecko/20100101 Firefox/83.0'
 }
+RUIAN_URL = 'https://ags.cuzk.cz/'
+RUIAN_ADM_URL = (
+    RUIAN_URL
+    + 'arcgis/rest/services/RUIAN/Vyhledavaci_sluzba_nad_daty_RUIAN/MapServer/1/query'
+)
 
 
 @dataclass
@@ -34,8 +41,11 @@ class Zdroj:
     nuts3: str = field(default=None)
     ulice_cp: str = field(default=None)
     psc_obec: str = field(default=None)
-    # souradnice: str = field(default=None)
     adm: str = field(default=None)
+    x: float = field(default=None)
+    y: float = field(default=None)
+    lat: float = field(default=None)
+    lon: float = field(default=None)
     prikon: float = field(default=None)
     nox: float = field(default=0)
     so2: float = field(default=0)
@@ -68,6 +78,22 @@ class Zdroj:
                 self.amoniak = self.amoniak + compound.mnozstvi
             else:
                 self.ostatni = self.ostatni + compound.mnozstvi
+
+    def request_coordinates(self, session: requests.Session) -> None:
+        resp = session.get(
+            RUIAN_ADM_URL,
+            params={'where': 'kod={}'.format(self.adm), 'f': 'json'},
+        )
+        if resp.ok:
+            features = resp.json().get('features')
+            if features:
+                self.x = features[0].get('geometry').get('x')
+                self.y = features[0].get('geometry').get('y')
+
+    def transform_coordinates(self) -> None:
+        '''Transform coordinates from Krovak to WGS84.'''
+        transformer = Transformer.from_crs(5514, 4326, always_xy=True)
+        self.lon, self.lat = transformer.transform(self.x, self.y)
 
     @classmethod
     def get_fieldnames(cls) -> list:
@@ -115,22 +141,22 @@ class Emis:
 
     def to_csv(
         self,
-        filename_sources: pathlib.Path = pathlib.Path('data') / 'zdroje.csv',
-        filename_emissions: pathlib.Path = pathlib.Path('data') / 'emise.csv',
+        filename_sources: pathlib.Path = pathlib.Path('data/2020/zdroje.csv'),
+        filename_emissions: pathlib.Path = pathlib.Path('data/2020/emise.csv'),
     ):
         with open(filename_sources, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Zdroj.get_fieldnames())
             writer.writeheader()
             for row in self.zdroje:
                 writer.writerow(asdict(row))
-        print(f'Saved {len(self.zdroje)} sources to {filename_sources}.')
+        logging.info(f'Saved {len(self.zdroje)} sources to {filename_sources}.')
 
         with open(filename_emissions, mode='w', newline='') as csvf:
             writer = csv.DictWriter(csvf, fieldnames=Emise.get_fieldnames())
             writer.writeheader()
             for row in self.emise:
                 writer.writerow(asdict(row))
-        print(f'Saved {len(self.emise)} emissions to {filename_emissions}.')
+        logging.info(f'Saved {len(self.emise)} emissions to {filename_emissions}.')
 
 
 def get_bs(session: requests.Session, url: str) -> BeautifulSoup:
@@ -141,7 +167,7 @@ def get_bs(session: requests.Session, url: str) -> BeautifulSoup:
         bs = BeautifulSoup(r.text, 'html.parser')
         return bs
     except (requests.exceptions.RequestException, socket.timeout):
-        print(f'Cannot reach {url}')
+        logging.warning(f'Cannot reach {url}')
         return None
 
 
@@ -165,7 +191,7 @@ def gather_utilities_urls(
         okresy_links.extend(get_links(get_bs(session, base_url + kraj_link)))
     for okres_link in okresy_links:
         links.extend(get_links(get_bs(session, base_url + okres_link)))
-    print(f'Scraped {len(links)} links to emission sources.')
+    logging.info(f'Scraped {len(links)} links to emission sources.')
     # Add base url to scraped slugs
     links = [base_url + link for link in links]
     return links
@@ -231,23 +257,22 @@ def parse_utility(
     palivo_spal = PalivoSpalovaci(zdroj_id=zdroj_id)
 
     zdroj.nuts3 = retrieve_nuts3(url)
-    zdroj.nazev = table.find('td', text='Název:').find_next_sibling().get_text()
-    zdroj.nace = table.find('td', text='NACE:').find_next_sibling().get_text()
+    zdroj.nazev = table.find('td', string='Název:').find_next_sibling().get_text()
+    zdroj.nace = table.find('td', string='NACE:').find_next_sibling().get_text()
     zdroj.ulice_cp = (
-        table.find('td', text='Ulice, č.p./č.o.:').find_next_sibling().get_text()
+        table.find('td', string='Ulice, č.p./č.o.:').find_next_sibling().get_text()
     )
-    zdroj.psc_obec = table.find('td', text='PSČ, Obec:').find_next_sibling().get_text()
-    # zdroj.souradnice = (
-    #     table.find('td', text='Zeměpisné souřadnice:').find_next_sibling().get_text()
-    # )
+    zdroj.psc_obec = (
+        table.find('td', string='PSČ, Obec:').find_next_sibling().get_text()
+    )
     zdroj.prikon = to_float(
-        table.find('td', text='Celkový příkon provozovny [MW]: ')
+        table.find('td', string='Celkový příkon provozovny [MW]: ')
         .find_next_sibling()
         .get_text()
     )
     try:
         zdroj.adm = (
-            table.find('td', text='Adresní místo (ADM):')
+            table.find('td', string='Adresní místo (ADM):')
             .find_next_sibling()
             .a.get_text()
         )

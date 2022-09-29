@@ -1,11 +1,11 @@
 
-# Zdroje znečišťování za rok 2019
+# Zdroje znečišťování za rok 2020
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jandolezal/emis/HEAD)
 
-Modul pro získání dat z [webu EMIS](http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html). Jde o údaje o provozovnách a emisích ohlášených v souhrnné provozní evidenci za rok 2019 na webu ČHMÚ.
+Modul pro získání dat z [webu EMIS](http://portal.chmi.cz/files/portal/docs/uoco/web_generator/plants/index_CZ.html). Jde o údaje o provozovnách a emisích ohlášených v souhrnné provozní evidenci za rok 2020 na webu ČHMÚ.
 
-Zajištění dat ve struktuře jako na webu ve formátu CSV (včetně nevhodného sdružení některých údajů jako je provozovatel - provozovna nebo psč a obec). Data původně obsahovala také zeměpisné souřadnice, které nyní schází.
+Zajištění dat ve struktuře jako na webu ve formátu CSV (včetně nevhodného sdružení některých údajů jako je provozovatel - provozovna nebo psč a obec). Zeměpisné souřadnice doplněné přes adresní místo z [RUIAN](https://ags.cuzk.cz/arcgis/rest/services/RUIAN).
 
 Údaje o emisích různých látek sjednoceny pouze do osmi kategorií (TZL, SO2, NOx, CO, VOC, NH3, CO2, ostatní).
 
