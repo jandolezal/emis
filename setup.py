@@ -7,6 +7,7 @@ setup(
     install_requires=[
         'beautifulsoup4',
         'click',
+        'pyproj',
         'requests',
     ],
     entry_points={
